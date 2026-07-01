@@ -1,0 +1,13 @@
+# Base de dados local
+*.db
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Ficheiros de trabalho
+Sistema_Gestao_Obra_v2_1.xlsx
+.claude/

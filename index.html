@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PROARKH — Gestão de Obra</title>
+<style>
+:root{
+  --bg:#0c0c0d; --surface:#141416; --surface2:#1b1b1e; --surface3:#222226;
+  --border:#2c2c31; --accent:#c8f135; --accent2:#7c6dfa; --accent3:#38bdf8;
+  --text:#efefef; --muted:#5a5a65; --danger:#ff4f4f; --success:#3dffa0; --warning:#ffb84d;
+  --font:'Calibri','Candara','Segoe UI',sans-serif; --mono:'Consolas','Courier New',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh;overflow:hidden;display:flex;}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+
+/* SIDEBAR */
+.sidebar{width:230px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.logo{padding:22px 20px 20px;border-bottom:1px solid var(--border);}
+.logo-name{font-size:17px;font-weight:800;color:var(--accent);letter-spacing:-0.3px;}
+.logo-name span{color:var(--text);}
+.logo-sub{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:2px;margin-top:2px;}
+.nav-section{padding:16px 18px 6px;font-size:9px;color:var(--muted);font-family:var(--mono);letter-spacing:2px;text-transform:uppercase;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:11px 18px;cursor:pointer;color:var(--muted);font-size:14px;font-weight:600;transition:all .15s;border-left:2px solid transparent;white-space:nowrap;}
+.nav-item:hover{color:var(--text);background:var(--surface2);}
+.nav-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(200,241,53,.05);}
+.nav-item .ico{width:18px;text-align:center;font-size:15px;}
+.nav-badge{margin-left:auto;background:var(--danger);color:#fff;font-size:10px;font-family:var(--mono);border-radius:10px;padding:1px 7px;font-weight:700;}
+.sidebar-foot{margin-top:auto;padding:14px 18px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);font-family:var(--mono);}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{height:60px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 24px;flex-shrink:0;background:var(--surface);}
+.topbar h1{font-size:16px;font-weight:700;white-space:nowrap;}
+.obra-select{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.obra-select label{font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;}
+select,input,textarea{background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:13px;padding:7px 10px;outline:none;}
+select:focus,input:focus,textarea:focus{border-color:var(--accent2);}
+.content{flex:1;overflow-y:auto;padding:24px;}
+
+/* BUTTONS */
+.btn{background:var(--accent);border:none;border-radius:6px;color:#0c0c0d;font-family:var(--font);font-weight:700;font-size:13px;padding:8px 14px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.btn:hover{filter:brightness(1.1);}
+.btn.sec{background:var(--surface3);color:var(--text);}
+.btn.sec:hover{background:var(--border);}
+.btn.pur{background:var(--accent2);color:#fff;}
+.btn.dgr{background:transparent;color:var(--danger);border:1px solid transparent;padding:4px 8px;font-size:12px;}
+.btn.dgr:hover{background:rgba(255,79,79,.1);}
+.btn.sm{padding:5px 10px;font-size:12px;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* CARDS */
+.grid{display:grid;gap:16px;}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:22px;}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;}
+.kpi .lbl{font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.kpi .val{font-size:24px;font-weight:800;font-family:var(--mono);}
+.kpi .sub{font-size:11px;color:var(--muted);margin-top:4px;}
+.kpi.ok .val{color:var(--success);} .kpi.warn .val{color:var(--warning);} .kpi.bad .val{color:var(--danger);}
+.kpi.acc .val{color:var(--accent);}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
+.card h2{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.card h2 .btn{margin-left:auto;}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+.card-head h2{margin:0;}
+.card-head .btn{margin-left:auto;}
+
+/* TABLE */
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;padding:8px 10px;border-bottom:1px solid var(--border);font-weight:600;}
+td{padding:8px 10px;border-bottom:1px solid var(--surface2);vertical-align:middle;}
+tr:hover td{background:var(--surface2);}
+td.num,th.num{text-align:right;font-family:var(--mono);}
+.cap-row td{background:var(--surface3)!important;font-weight:700;}
+.cap-row:hover td{background:var(--surface3)!important;}
+.tbl-inp{width:100%;background:transparent;border:1px solid transparent;padding:4px 6px;font-size:13px;border-radius:4px;}
+.tbl-inp:hover{border-color:var(--border);}
+.tbl-inp:focus{border-color:var(--accent2);background:var(--bg);}
+.tbl-inp.num{text-align:right;font-family:var(--mono);}
+.mini{font-size:11px;color:var(--muted);font-family:var(--mono);}
+
+/* BADGES */
+.badge{display:inline-block;font-size:10px;font-family:var(--mono);padding:2px 8px;border-radius:20px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.badge.g{background:rgba(61,255,160,.12);color:var(--success);}
+.badge.y{background:rgba(255,184,77,.14);color:var(--warning);}
+.badge.o{background:rgba(255,138,0,.14);color:#ff8a00;}
+.badge.r{background:rgba(255,79,79,.14);color:var(--danger);}
+.badge.b{background:rgba(124,109,250,.16);color:var(--accent2);}
+.badge.gray{background:var(--surface3);color:var(--muted);}
+
+/* BAR */
+.bar{height:6px;background:var(--surface3);border-radius:4px;overflow:hidden;min-width:60px;}
+.bar-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .4s;}
+.bar-fill.over{background:var(--danger);}
+
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+.modal h3{font-size:16px;margin-bottom:18px;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+.field input,.field select,.field textarea{width:100%;}
+.field-row{display:flex;gap:12px;}
+.field-row .field{flex:1;}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;}
+
+/* EMPTY */
+.empty{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty .big{font-size:42px;margin-bottom:14px;opacity:.5;}
+.empty p{font-size:14px;margin-bottom:18px;}
+.hidden{display:none!important;}
+.row-flex{display:flex;align-items:center;gap:10px;}
+.spacer{flex:1;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0c0c0d;font-weight:700;padding:12px 22px;border-radius:8px;z-index:200;opacity:0;transition:opacity .3s;pointer-events:none;font-size:13px;}
+.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-name">PRO<span>ARKH</span></div>
+    <div class="logo-sub">GESTÃO DE OBRA</div>
+  </div>
+  <div class="nav-section">Módulos</div>
+  <div class="nav-item active" data-view="dashboard"><span class="ico">▚</span> Resumo</div>
+  <div class="nav-item" data-view="orcamento"><span class="ico">≡</span> Orçamentação</div>
+  <div class="nav-item" data-view="autos"><span class="ico">▤</span> Autos de Medição</div>
+  <div class="nav-item" data-view="custos"><span class="ico">€</span> Controlo de Custos</div>
+  <div class="nav-item" data-view="obra"><span class="ico">◷</span> Gestão de Obra <span class="nav-badge hidden" id="navBadge">0</span></div>
+  <div class="nav-section">Dados</div>
+  <div class="nav-item" data-view="obras"><span class="ico">▦</span> Obras / Clientes</div>
+  <div class="sidebar-foot" id="footInfo">v2.1 · local</div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <h1 id="viewTitle">Resumo</h1>
+    <div class="obra-select">
+      <label>Obra</label>
+      <select id="obraSelect" style="min-width:220px"></select>
+      <button class="btn sm" id="newObraBtn">+ Obra</button>
+    </div>
+  </div>
+  <div class="content" id="content"></div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modalBox"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ ESTADO / PERSISTÊNCIA (SERVIDOR) ============ */
+const API = '/api';
+let DB = { obras: [] };
+let currentObraId = null;
+let currentView = 'dashboard';
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+/* Carregar todas as obras do servidor */
+async function boot(){
+  try{
+    const r = await fetch(API+'/obras');
+    if(!r.ok) throw 0;
+    DB.obras = await r.json();
+    setOnline(true);
+  }catch(e){
+    setOnline(false);
+    toast('Sem ligação ao servidor');
+  }
+  currentObraId = DB.obras[0]?.id || null;
+  render();
+}
+
+/* Guardar a obra atual (debounced, com flush ao trocar de obra) */
+let saveTimer = null, pendingObra = null;
+function scheduleSave(){
+  const o = obra(); if(!o) return;
+  if(pendingObra && pendingObra.id !== o.id) saveObra(pendingObra); // flush da anterior
+  pendingObra = o;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{ saveObra(o); pendingObra = null; }, 350);
+}
+async function saveObra(o){
+  try{
+    const r = await fetch(API+'/obras/'+o.id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
+    setOnline(r.ok);
+  }catch(e){ setOnline(false); toast('Falha ao guardar — sem ligação'); }
+}
+async function deleteObraApi(id){
+  try{ await fetch(API+'/obras/'+id, {method:'DELETE'}); }catch(e){}
+}
+function setOnline(ok){
+  const el = document.getElementById('footInfo');
+  if(el) el.innerHTML = ok ? 'v2.1 · <span style="color:var(--success)">● servidor</span>'
+                           : 'v2.1 · <span style="color:var(--danger)">● offline</span>';
+}
+
+/* ============ HELPERS ============ */
+const $ = s => document.querySelector(s);
+const num = n => (n||0).toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct = n => (n||0).toLocaleString('pt-PT',{minimumFractionDigits:1,maximumFractionDigits:1}) + '%';
+const esc = s => (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function obra(){ return DB.obras.find(o=>o.id===currentObraId); }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+function fmtDate(d){ if(!d) return '—'; const p=d.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
+function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
+function today(){ return new Date().toISOString().slice(0,10); }
+
+/* CÁLCULOS */
+function artigoTotal(a){ return (a.qtd||0)*(a.preco||0); }
+function capTotal(c){ return c.artigos.reduce((s,a)=>s+artigoTotal(a),0); }
+function orcTotal(o){ return o.capitulos.reduce((s,c)=>s+capTotal(c),0); }
+function allArtigos(o){ return o.capitulos.flatMap(c=>c.artigos.map(a=>({...a,capId:c.id,capNome:c.nome}))); }
+// auto: linhas = { artigoId: percentualAcumulado }
+function autoValorAcum(o, auto){
+  let v=0;
+  for(const a of allArtigos(o)){
+    const p = auto.linhas[a.id]||0;
+    v += artigoTotal(a)*(p/100);
+  }
+  return v;
+}
+function faturadoTotal(o){
+  // valor do último auto (acumulado) — se não houver, 0
+  if(!o.autos.length) return 0;
+  const last = o.autos[o.autos.length-1];
+  return autoValorAcum(o,last);
+}
+function execPercent(o){ const t=orcTotal(o); return t? faturadoTotal(o)/t*100 : 0; }
+function custosTotal(o){ return o.custos.reduce((s,c)=>s+(c.valor||0),0); }
+
+/* ============ RENDER PRINCIPAL ============ */
+function render(){
+  renderObraSelect();
+  renderNav();
+  const badge = obra()? obra().tarefas.filter(t=>t.estado!=='concluida').length : 0;
+  $('#navBadge').textContent = badge;
+  $('#navBadge').classList.toggle('hidden', badge===0);
+
+  if(!obra()){ $('#content').innerHTML = emptyObras(); $('#viewTitle').textContent='Obras'; return; }
+  const titles={dashboard:'Resumo',orcamento:'Orçamentação',autos:'Autos de Medição',custos:'Controlo de Custos',obra:'Gestão de Obra',obras:'Obras / Clientes'};
+  $('#viewTitle').textContent = titles[currentView]||'';
+  const fns={dashboard:viewDashboard,orcamento:viewOrcamento,autos:viewAutos,custos:viewCustos,obra:viewObra,obras:viewObras};
+  $('#content').innerHTML = (fns[currentView]||viewDashboard)();
+  wireView();
+  scheduleSave();
+}
+function renderObraSelect(){
+  const sel=$('#obraSelect');
+  sel.innerHTML = DB.obras.map(o=>`<option value="${o.id}" ${o.id===currentObraId?'selected':''}>${esc(o.nome)} — ${esc(o.cliente)}</option>`).join('') || '<option>Sem obras</option>';
+}
+function renderNav(){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===currentView));
+}
+
+/* ============ DASHBOARD ============ */
+function viewDashboard(){
+  const o=obra();
+  const orc=orcTotal(o), fat=faturadoTotal(o), cus=custosTotal(o), ex=execPercent(o);
+  const margem = fat - cus;
+  const margemPct = fat? margem/fat*100 : 0;
+  const diasDecorridos = daysBetween(o.dataInicio, today());
+  const diasPrazo = o.prazoDias||0;
+  const prazoPct = diasPrazo? Math.min(diasDecorridos/diasPrazo*100,100):0;
+  const pend = o.tarefas.filter(t=>t.estado!=='concluida').length;
+  const atrasadas = o.tarefas.filter(t=>t.estado!=='concluida' && t.prazo && t.prazo<today()).length;
+
+  return `
+  <div class="grid kpis">
+    <div class="kpi acc"><div class="lbl">Valor Orçamento</div><div class="val">${num(orc)} €</div><div class="sub">${o.capitulos.length} capítulos · ${allArtigos(o).length} artigos</div></div>
+    <div class="kpi"><div class="lbl">Faturado (autos)</div><div class="val">${num(fat)} €</div><div class="sub">${pct(ex)} executado</div></div>
+    <div class="kpi ${cus>fat?'bad':''}"><div class="lbl">Custos Reais</div><div class="val">${num(cus)} €</div><div class="sub">${o.custos.length} registos</div></div>
+    <div class="kpi ${margem>=0?'ok':'bad'}"><div class="lbl">Margem</div><div class="val">${num(margem)} €</div><div class="sub">${pct(margemPct)} sobre faturado</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Execução da obra</h2></div>
+    <div style="margin-bottom:18px">
+      <div class="row-flex" style="margin-bottom:6px"><span class="mini">Trabalhos executados (autos)</span><span class="spacer"></span><span class="mini">${pct(ex)}</span></div>
+      <div class="bar" style="height:10px"><div class="bar-fill" style="width:${Math.min(ex,100)}%"></div></div>
+    </div>
+    <div>
+      <div class="row-flex" style="margin-bottom:6px"><span class="mini">Prazo decorrido (${diasDecorridos} / ${diasPrazo} dias)</span><span class="spacer"></span><span class="mini">${pct(prazoPct)}</span></div>
+      <div class="bar" style="height:10px"><div class="bar-fill ${prazoPct>ex+15?'over':''}" style="width:${prazoPct}%"></div></div>
+      ${prazoPct>ex+15?'<div class="mini" style="color:var(--warning);margin-top:8px">⚠ O prazo está a avançar mais depressa que a execução.</div>':''}
+    </div>
+  </div>
+
+  <div class="grid" style="grid-template-columns:1fr 1fr">
+    <div class="card">
+      <div class="card-head"><h2>Orçamentado vs. Custo por capítulo</h2></div>
+      <table><thead><tr><th>Capítulo</th><th class="num">Orçam.</th><th class="num">Custo</th></tr></thead><tbody>
+      ${o.capitulos.map(c=>{
+        const orcC=capTotal(c);
+        const cusC=o.custos.filter(x=>x.capituloId===c.id).reduce((s,x)=>s+x.valor,0);
+        return `<tr><td>${esc(c.nome)}</td><td class="num">${num(orcC)}</td><td class="num" style="color:${cusC>orcC?'var(--danger)':'var(--text)'}">${num(cusC)}</td></tr>`;
+      }).join('')}
+      </tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Tarefas ${pend?`<span class="badge ${atrasadas?'r':'b'}">${pend} por fazer</span>`:''}</h2><button class="btn sm sec" data-goto="obra">Ver todas</button></div>
+      ${o.tarefas.filter(t=>t.estado!=='concluida').slice(0,5).map(t=>`
+        <div class="row-flex" style="padding:8px 0;border-bottom:1px solid var(--surface2)">
+          <span class="badge ${t.prioridade==='alta'?'r':t.prioridade==='media'?'y':'gray'}">${t.prioridade}</span>
+          <span>${esc(t.titulo)}</span><span class="spacer"></span>
+          <span class="mini" style="color:${t.prazo<today()?'var(--danger)':'var(--muted)'}">${fmtDate(t.prazo)}</span>
+        </div>`).join('') || '<div class="mini" style="padding:10px 0">Sem tarefas pendentes 🎉</div>'}
+    </div>
+  </div>`;
+}
+
+/* ============ ORÇAMENTAÇÃO ============ */
+function viewOrcamento(){
+  const o=obra();
+  let rows='';
+  o.capitulos.forEach(c=>{
+    rows += `<tr class="cap-row" data-cap="${c.id}">
+      <td colspan="2"><input class="tbl-inp" data-edit="capNome" data-cap="${c.id}" value="${esc(c.nome)}" style="font-weight:700"></td>
+      <td></td><td></td><td class="num">${num(capTotal(c))} €</td>
+      <td style="text-align:right"><button class="btn dgr" data-delcap="${c.id}" title="Eliminar capítulo">✕</button></td></tr>`;
+    c.artigos.forEach(a=>{
+      rows += `<tr data-art="${a.id}" data-cap="${c.id}">
+        <td style="width:70px"><input class="tbl-inp" data-edit="codigo" data-art="${a.id}" value="${esc(a.codigo)}"></td>
+        <td><input class="tbl-inp" data-edit="designacao" data-art="${a.id}" value="${esc(a.designacao)}"></td>
+        <td style="width:60px"><input class="tbl-inp" data-edit="unidade" data-art="${a.id}" value="${esc(a.unidade)}"></td>
+        <td style="width:90px"><input class="tbl-inp num" type="number" step="any" data-edit="qtd" data-art="${a.id}" value="${a.qtd}"></td>
+        <td style="width:110px"><input class="tbl-inp num" type="number" step="any" data-edit="preco" data-art="${a.id}" value="${a.preco}"></td>
+        <td class="num" style="width:110px;font-weight:700">${num(artigoTotal(a))} €</td>
+        <td style="text-align:right;width:40px"><button class="btn dgr" data-delart="${a.id}" data-cap="${c.id}">✕</button></td></tr>`;
+    });
+    rows += `<tr><td colspan="7" style="padding:4px 10px"><button class="btn sm sec" data-addart="${c.id}">+ artigo</button></td></tr>`;
+  });
+  return `
+  <div class="card">
+    <div class="card-head"><h2>Mapa de Quantidades e Trabalhos</h2>
+      <button class="btn sec sm" data-addcap>+ Capítulo</button>
+      <button class="btn sm" data-export="orc">Exportar CSV</button></div>
+    <table><thead><tr><th>Cód.</th><th>Designação</th><th>Un.</th><th class="num">Qtd</th><th class="num">P. Unit.</th><th class="num">Total</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="7" class="mini" style="padding:20px">Sem capítulos. Adiciona o primeiro.</td></tr>'}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--border)"><td colspan="5" style="text-align:right;font-weight:700;padding-top:14px">TOTAL DO ORÇAMENTO</td><td class="num" style="font-size:16px;font-weight:800;color:var(--accent);padding-top:14px">${num(orcTotal(o))} €</td><td></td></tr></tfoot>
+    </table>
+  </div>`;
+}
+
+/* ============ AUTOS DE MEDIÇÃO ============ */
+function viewAutos(){
+  const o=obra();
+  const arts=allArtigos(o);
+  const autosList = o.autos.map((au,i)=>{
+    const val=autoValorAcum(o,au);
+    const prev = i>0? autoValorAcum(o,o.autos[i-1]) : 0;
+    return `<tr>
+      <td><b>Auto ${au.numero}</b></td><td>${fmtDate(au.data)}</td>
+      <td class="num">${num(val)} €</td>
+      <td class="num" style="color:var(--accent2)">${num(val-prev)} €</td>
+      <td class="num">${pct(orcTotal(o)?val/orcTotal(o)*100:0)}</td>
+      <td style="text-align:right"><button class="btn sm sec" data-editauto="${au.id}">Editar</button> <button class="btn dgr" data-delauto="${au.id}">✕</button></td></tr>`;
+  }).join('');
+
+  return `
+  <div class="grid kpis">
+    <div class="kpi acc"><div class="lbl">Orçamento total</div><div class="val">${num(orcTotal(o))} €</div></div>
+    <div class="kpi"><div class="lbl">Faturado acumulado</div><div class="val">${num(faturadoTotal(o))} €</div><div class="sub">${pct(execPercent(o))} da obra</div></div>
+    <div class="kpi"><div class="lbl">Por faturar</div><div class="val">${num(orcTotal(o)-faturadoTotal(o))} €</div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Autos emitidos</h2><button class="btn sm" data-newauto>+ Novo Auto</button></div>
+    <table><thead><tr><th>Auto</th><th>Data</th><th class="num">Acumulado</th><th class="num">Do período</th><th class="num">% obra</th><th></th></tr></thead>
+    <tbody>${autosList || '<tr><td colspan="6" class="mini" style="padding:20px">Ainda não há autos. Cria o primeiro auto de medição para faturar a obra executada.</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+/* Modal de edição de auto */
+function autoModal(autoId){
+  const o=obra();
+  let au = o.autos.find(a=>a.id===autoId);
+  const isNew=!au;
+  if(isNew){
+    const prevLinhas = o.autos.length? {...o.autos[o.autos.length-1].linhas} : {};
+    au={id:uid(), numero:o.autos.length+1, data:today(), linhas:prevLinhas};
+  }
+  const rows = o.capitulos.map(c=>{
+    const artRows = c.artigos.map(a=>{
+      const p = au.linhas[a.id]||0;
+      return `<tr>
+        <td class="mini">${esc(a.codigo)}</td><td>${esc(a.designacao)}</td>
+        <td class="num mini">${num(artigoTotal(a))} €</td>
+        <td style="width:90px"><input class="tbl-inp num" type="number" min="0" max="100" step="any" data-autopct="${a.id}" value="${p}"></td>
+        <td class="num mini" data-autoval="${a.id}">${num(artigoTotal(a)*p/100)} €</td></tr>`;
+    }).join('');
+    return `<tr class="cap-row"><td colspan="5">${esc(c.nome)}</td></tr>${artRows}`;
+  }).join('');
+
+  openModal(`
+    <h3>${isNew?'Novo Auto de Medição':'Editar Auto '+au.numero}</h3>
+    <div class="field-row">
+      <div class="field"><label>Nº Auto</label><input id="au_num" type="number" value="${au.numero}"></div>
+      <div class="field"><label>Data</label><input id="au_data" type="date" value="${au.data}"></div>
+    </div>
+    <p class="mini" style="margin-bottom:10px">Indica a <b>% acumulada executada</b> de cada artigo até esta data.</p>
+    <div style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+      <table><thead><tr><th>Cód</th><th>Artigo</th><th class="num">Total</th><th class="num">% acum.</th><th class="num">Valor</th></tr></thead>
+      <tbody id="au_body">${rows}</tbody></table>
+    </div>
+    <div class="row-flex" style="margin-top:14px"><span class="mini">Valor acumulado deste auto:</span><span class="spacer"></span><b id="au_total" style="font-family:var(--mono);color:var(--accent)">${num(autoValorAcum(o,au))} €</b></div>
+    <div class="modal-actions">
+      <button class="btn sec" data-close>Cancelar</button>
+      <button class="btn" id="au_save">Guardar Auto</button>
+    </div>
+  `);
+  // live update
+  $('#au_body').addEventListener('input', e=>{
+    if(!e.target.dataset.autopct) return;
+    const aid=e.target.dataset.autopct;
+    const a=allArtigos(o).find(x=>x.id===aid);
+    let p=parseFloat(e.target.value)||0; p=Math.max(0,Math.min(100,p));
+    au.linhas[aid]=p;
+    const cell=document.querySelector(`[data-autoval="${aid}"]`);
+    if(cell) cell.textContent=num(artigoTotal(a)*p/100)+' €';
+    $('#au_total').textContent=num(autoValorAcum(o,au))+' €';
+  });
+  $('#au_save').onclick=()=>{
+    au.numero=parseInt($('#au_num').value)||au.numero;
+    au.data=$('#au_data').value;
+    if(isNew) o.autos.push(au);
+    o.autos.sort((a,b)=>a.numero-b.numero);
+    closeModal(); render(); toast('Auto guardado');
+  };
+}
+
+/* ============ CONTROLO DE CUSTOS ============ */
+function viewCustos(){
+  const o=obra();
+  const rows=o.custos.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(c=>{
+    const cap=o.capitulos.find(x=>x.id===c.capituloId);
+    return `<tr>
+      <td>${fmtDate(c.data)}</td><td>${esc(c.descricao)}</td>
+      <td>${esc(c.fornecedor||'—')}</td>
+      <td>${cap?`<span class="badge b">${esc(cap.nome.split('·')[0].trim())}</span>`:'<span class="badge gray">geral</span>'}</td>
+      <td class="num" style="font-weight:700">${num(c.valor)} €</td>
+      <td style="text-align:right"><button class="btn dgr" data-delcusto="${c.id}">✕</button></td></tr>`;
+  }).join('');
+  const orc=orcTotal(o), cus=custosTotal(o), fat=faturadoTotal(o);
+  return `
+  <div class="grid kpis">
+    <div class="kpi acc"><div class="lbl">Orçamento</div><div class="val">${num(orc)} €</div></div>
+    <div class="kpi ${cus>orc?'bad':''}"><div class="lbl">Custo real total</div><div class="val">${num(cus)} €</div><div class="sub">${pct(orc?cus/orc*100:0)} do orçamento</div></div>
+    <div class="kpi ${(fat-cus)>=0?'ok':'bad'}"><div class="lbl">Resultado (faturado − custo)</div><div class="val">${num(fat-cus)} €</div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Desvio orçamentado vs. custo real por capítulo</h2></div>
+    <table><thead><tr><th>Capítulo</th><th class="num">Orçamentado</th><th class="num">Custo real</th><th class="num">Desvio</th><th style="width:180px">Consumo</th></tr></thead><tbody>
+    ${o.capitulos.map(c=>{
+      const orcC=capTotal(c);
+      const cusC=o.custos.filter(x=>x.capituloId===c.id).reduce((s,x)=>s+x.valor,0);
+      const desvio=orcC-cusC; const consumo=orcC?cusC/orcC*100:0;
+      return `<tr><td>${esc(c.nome)}</td><td class="num">${num(orcC)}</td><td class="num">${num(cusC)}</td>
+        <td class="num" style="color:${desvio<0?'var(--danger)':'var(--success)'}">${num(desvio)}</td>
+        <td><div class="bar"><div class="bar-fill ${consumo>100?'over':''}" style="width:${Math.min(consumo,100)}%"></div></div><span class="mini">${pct(consumo)}</span></td></tr>`;
+    }).join('')}
+    ${(()=>{const geral=o.custos.filter(x=>!x.capituloId||!o.capitulos.find(c=>c.id===x.capituloId)).reduce((s,x)=>s+x.valor,0);
+      return geral?`<tr><td><span class="badge gray">custos gerais</span></td><td class="num">—</td><td class="num">${num(geral)}</td><td class="num">—</td><td></td></tr>`:'';})()}
+    </tbody></table>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Registo de custos</h2><button class="btn sm" data-newcusto>+ Custo</button><button class="btn sm sec" data-export="custos">CSV</button></div>
+    <table><thead><tr><th>Data</th><th>Descrição</th><th>Fornecedor</th><th>Capítulo</th><th class="num">Valor</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" class="mini" style="padding:20px">Sem custos registados.</td></tr>'}</tbody></table>
+  </div>`;
+}
+function custoModal(){
+  const o=obra();
+  openModal(`
+    <h3>Novo custo</h3>
+    <div class="field-row">
+      <div class="field"><label>Data</label><input id="cu_data" type="date" value="${today()}"></div>
+      <div class="field"><label>Valor (€)</label><input id="cu_valor" type="number" step="any" placeholder="0.00"></div>
+    </div>
+    <div class="field"><label>Descrição</label><input id="cu_desc" placeholder="Ex: Betão pronto"></div>
+    <div class="field"><label>Fornecedor</label><input id="cu_forn" placeholder="Ex: Betões do Cávado"></div>
+    <div class="field"><label>Capítulo</label><select id="cu_cap"><option value="">— Custo geral —</option>${o.capitulos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
+    <div class="modal-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="cu_save">Guardar</button></div>
+  `);
+  $('#cu_save').onclick=()=>{
+    const v=parseFloat($('#cu_valor').value);
+    if(!v || !$('#cu_desc').value.trim()) return toast('Preenche descrição e valor');
+    o.custos.push({id:uid(),data:$('#cu_data').value,valor:v,descricao:$('#cu_desc').value.trim(),fornecedor:$('#cu_forn').value.trim(),capituloId:$('#cu_cap').value||null});
+    closeModal(); render(); toast('Custo registado');
+  };
+}
+
+/* ============ GESTÃO DE OBRA ============ */
+function viewObra(){
+  const o=obra();
+  const diasDecorridos=daysBetween(o.dataInicio,today());
+  const fim=new Date(o.dataInicio); fim.setDate(fim.getDate()+(o.prazoDias||0));
+  const diasRest=daysBetween(today(),fim.toISOString().slice(0,10));
+  const ordP={alta:0,media:1,baixa:2};
+  const tarefas=o.tarefas.slice().sort((a,b)=>{
+    if((a.estado==='concluida')!==(b.estado==='concluida')) return a.estado==='concluida'?1:-1;
+    return (ordP[a.prioridade]-ordP[b.prioridade])||((a.prazo||'').localeCompare(b.prazo||''));
+  });
+  return `
+  <div class="grid kpis">
+    <div class="kpi"><div class="lbl">Início</div><div class="val" style="font-size:18px">${fmtDate(o.dataInicio)}</div><div class="sub">há ${diasDecorridos} dias</div></div>
+    <div class="kpi ${diasRest<0?'bad':diasRest<15?'warn':'ok'}"><div class="lbl">${diasRest<0?'Atraso':'Dias restantes'}</div><div class="val">${Math.abs(diasRest)}</div><div class="sub">fim previsto ${fmtDate(fim.toISOString().slice(0,10))}</div></div>
+    <div class="kpi acc"><div class="lbl">Execução</div><div class="val">${pct(execPercent(o))}</div><div class="sub">segundo autos</div></div>
+    <div class="kpi ${o.tarefas.filter(t=>t.estado!=='concluida'&&t.prazo<today()).length?'bad':''}"><div class="lbl">Tarefas por fazer</div><div class="val">${o.tarefas.filter(t=>t.estado!=='concluida').length}</div><div class="sub">${o.tarefas.filter(t=>t.estado!=='concluida'&&t.prazo<today()).length} em atraso</div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Tarefas da obra</h2><button class="btn sm" data-newtarefa>+ Tarefa</button></div>
+    <table><thead><tr><th style="width:40px"></th><th>Tarefa</th><th>Responsável</th><th>Prazo</th><th>Prioridade</th><th></th></tr></thead><tbody>
+    ${tarefas.map(t=>{
+      const done=t.estado==='concluida';
+      const late=!done && t.prazo && t.prazo<today();
+      return `<tr style="${done?'opacity:.5':''}">
+        <td style="text-align:center"><input type="checkbox" data-toggletarefa="${t.id}" ${done?'checked':''} style="width:16px;height:16px;cursor:pointer"></td>
+        <td style="${done?'text-decoration:line-through':''}">${esc(t.titulo)}</td>
+        <td class="mini">${esc(t.responsavel||'—')}</td>
+        <td class="mini" style="color:${late?'var(--danger)':'var(--muted)'}">${fmtDate(t.prazo)}${late?' ⚠':''}</td>
+        <td><span class="badge ${t.prioridade==='alta'?'r':t.prioridade==='media'?'y':'gray'}">${t.prioridade}</span></td>
+        <td style="text-align:right"><button class="btn dgr" data-deltarefa="${t.id}">✕</button></td></tr>`;
+    }).join('') || '<tr><td colspan="6" class="mini" style="padding:20px">Sem tarefas.</td></tr>'}
+    </tbody></table>
+  </div>`;
+}
+function tarefaModal(){
+  const o=obra();
+  openModal(`
+    <h3>Nova tarefa</h3>
+    <div class="field"><label>Tarefa</label><input id="t_tit" placeholder="Ex: Encomendar cofragem"></div>
+    <div class="field-row">
+      <div class="field"><label>Responsável</label><input id="t_resp" value="Jorge"></div>
+      <div class="field"><label>Prazo</label><input id="t_prazo" type="date" value="${today()}"></div>
+    </div>
+    <div class="field"><label>Prioridade</label><select id="t_prio"><option value="alta">Alta</option><option value="media" selected>Média</option><option value="baixa">Baixa</option></select></div>
+    <div class="modal-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="t_save">Guardar</button></div>
+  `);
+  $('#t_save').onclick=()=>{
+    if(!$('#t_tit').value.trim()) return toast('Escreve a tarefa');
+    o.tarefas.push({id:uid(),titulo:$('#t_tit').value.trim(),responsavel:$('#t_resp').value.trim(),prazo:$('#t_prazo').value,prioridade:$('#t_prio').value,estado:'pendente'});
+    closeModal(); render(); toast('Tarefa criada');
+  };
+}
+
+/* ============ OBRAS / CLIENTES ============ */
+function viewObras(){
+  return `
+  <div class="card">
+    <div class="card-head"><h2>Obras registadas</h2><button class="btn sm" id="newObraBtn2">+ Nova Obra</button></div>
+    <table><thead><tr><th>Obra</th><th>Cliente</th><th>Código</th><th>Início</th><th class="num">Orçamento</th><th class="num">Exec.</th><th></th></tr></thead><tbody>
+    ${DB.obras.map(o=>`<tr>
+      <td><b>${esc(o.nome)}</b><div class="mini">${esc(o.morada||'')}</div></td>
+      <td>${esc(o.cliente)}</td><td class="mini">${esc(o.codigo||'—')}</td>
+      <td class="mini">${fmtDate(o.dataInicio)}</td>
+      <td class="num">${num(orcTotal(o))} €</td>
+      <td class="num">${pct(execPercent(o))}</td>
+      <td style="text-align:right">
+        <button class="btn sm sec" data-openobra="${o.id}">Abrir</button>
+        <button class="btn sm sec" data-editobra="${o.id}">Editar</button>
+        <button class="btn dgr" data-delobra="${o.id}">✕</button></td></tr>`).join('')}
+    </tbody></table>
+  </div>`;
+}
+function obraModal(obraId){
+  let o = obraId? DB.obras.find(x=>x.id===obraId) : null;
+  const isNew=!o;
+  o = o || {nome:'',cliente:'',codigo:'',morada:'',dataInicio:today(),prazoDias:180};
+  openModal(`
+    <h3>${isNew?'Nova obra':'Editar obra'}</h3>
+    <div class="field"><label>Nome da obra</label><input id="o_nome" value="${esc(o.nome)}" placeholder="Ex: Moradia unifamiliar"></div>
+    <div class="field-row">
+      <div class="field"><label>Cliente</label><input id="o_cli" value="${esc(o.cliente)}"></div>
+      <div class="field"><label>Código cliente</label><input id="o_cod" value="${esc(o.codigo||'')}" placeholder="CLI-26-00X"></div>
+    </div>
+    <div class="field"><label>Morada / Local</label><input id="o_mor" value="${esc(o.morada||'')}"></div>
+    <div class="field-row">
+      <div class="field"><label>Data de início</label><input id="o_ini" type="date" value="${o.dataInicio}"></div>
+      <div class="field"><label>Prazo (dias)</label><input id="o_prazo" type="number" value="${o.prazoDias||0}"></div>
+    </div>
+    <div class="modal-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="o_save">Guardar</button></div>
+  `);
+  $('#o_save').onclick=()=>{
+    if(!$('#o_nome').value.trim()) return toast('Dá um nome à obra');
+    const vals={nome:$('#o_nome').value.trim(),cliente:$('#o_cli').value.trim(),codigo:$('#o_cod').value.trim(),morada:$('#o_mor').value.trim(),dataInicio:$('#o_ini').value,prazoDias:parseInt($('#o_prazo').value)||0};
+    if(isNew){
+      const nid=uid();
+      DB.obras.push({id:nid,...vals,capitulos:[],autos:[],custos:[],tarefas:[]});
+      currentObraId=nid; currentView='orcamento';
+    }else{ Object.assign(o,vals); }
+    closeModal(); render(); toast('Obra guardada');
+  };
+}
+function emptyObras(){
+  return `<div class="empty"><div class="big">▦</div><p>Ainda não tens nenhuma obra.</p><button class="btn" id="firstObra">+ Criar primeira obra</button></div>`;
+}
+
+/* ============ MODAL / EVENTOS ============ */
+function openModal(html){ $('#modalBox').innerHTML=html; $('#modalBg').classList.add('show'); }
+function closeModal(){ $('#modalBg').classList.remove('show'); }
+$('#modalBg').addEventListener('click',e=>{ if(e.target.id==='modalBg'||e.target.dataset.close!==undefined) closeModal(); });
+
+/* Navegação */
+document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{ currentView=n.dataset.view; render(); });
+$('#obraSelect').onchange=e=>{ currentObraId=e.target.value; render(); };
+$('#newObraBtn').onclick=()=>obraModal();
+
+/* Eventos por view (delegação) */
+function wireView(){
+  const c=$('#content');
+  c.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{currentView=b.dataset.goto;render();});
+  c.querySelectorAll('[data-export]').forEach(b=>b.onclick=()=>exportCSV(b.dataset.export));
+
+  // ORÇAMENTO
+  c.querySelectorAll('[data-addcap]').forEach(b=>b.onclick=()=>{obra().capitulos.push({id:uid(),nome:'Novo capítulo',artigos:[]});render();});
+  c.querySelectorAll('[data-addart]').forEach(b=>b.onclick=()=>{const cap=obra().capitulos.find(x=>x.id===b.dataset.addart);cap.artigos.push({id:uid(),codigo:'',designacao:'Novo artigo',unidade:'un',qtd:0,preco:0});render();});
+  c.querySelectorAll('[data-delcap]').forEach(b=>b.onclick=()=>{if(confirm('Eliminar capítulo e os seus artigos?')){obra().capitulos=obra().capitulos.filter(x=>x.id!==b.dataset.delcap);render();}});
+  c.querySelectorAll('[data-delart]').forEach(b=>b.onclick=()=>{const cap=obra().capitulos.find(x=>x.id===b.dataset.cap);cap.artigos=cap.artigos.filter(a=>a.id!==b.dataset.delart);render();});
+  c.querySelectorAll('[data-edit]').forEach(inp=>{
+    inp.addEventListener('change',()=>{
+      const f=inp.dataset.edit;
+      if(f==='capNome'){ const cap=obra().capitulos.find(x=>x.id===inp.dataset.cap); cap.nome=inp.value; }
+      else{ const a=allArtigos(obra()).find(x=>x.id===inp.dataset.art);
+        const real=obra().capitulos.flatMap(c2=>c2.artigos).find(x=>x.id===inp.dataset.art);
+        real[f]=(f==='qtd'||f==='preco')? (parseFloat(inp.value)||0) : inp.value; }
+      render();
+    });
+  });
+
+  // AUTOS
+  c.querySelectorAll('[data-newauto]').forEach(b=>b.onclick=()=>autoModal());
+  c.querySelectorAll('[data-editauto]').forEach(b=>b.onclick=()=>autoModal(b.dataset.editauto));
+  c.querySelectorAll('[data-delauto]').forEach(b=>b.onclick=()=>{if(confirm('Eliminar auto?')){obra().autos=obra().autos.filter(a=>a.id!==b.dataset.delauto);render();}});
+
+  // CUSTOS
+  c.querySelectorAll('[data-newcusto]').forEach(b=>b.onclick=()=>custoModal());
+  c.querySelectorAll('[data-delcusto]').forEach(b=>b.onclick=()=>{obra().custos=obra().custos.filter(x=>x.id!==b.dataset.delcusto);render();});
+
+  // OBRA / TAREFAS
+  c.querySelectorAll('[data-newtarefa]').forEach(b=>b.onclick=()=>tarefaModal());
+  c.querySelectorAll('[data-toggletarefa]').forEach(b=>b.onclick=()=>{const t=obra().tarefas.find(x=>x.id===b.dataset.toggletarefa);t.estado=t.estado==='concluida'?'pendente':'concluida';render();});
+  c.querySelectorAll('[data-deltarefa]').forEach(b=>b.onclick=()=>{obra().tarefas=obra().tarefas.filter(x=>x.id!==b.dataset.deltarefa);render();});
+
+  // OBRAS
+  c.querySelectorAll('[data-openobra]').forEach(b=>b.onclick=()=>{currentObraId=b.dataset.openobra;currentView='dashboard';render();});
+  c.querySelectorAll('[data-editobra]').forEach(b=>b.onclick=()=>obraModal(b.dataset.editobra));
+  c.querySelectorAll('[data-delobra]').forEach(b=>b.onclick=()=>{if(confirm('Eliminar obra e todos os seus dados?')){const did=b.dataset.delobra;deleteObraApi(did);DB.obras=DB.obras.filter(o=>o.id!==did);if(currentObraId===did)currentObraId=DB.obras[0]?.id||null;render();}});
+  const nb=c.querySelector('#newObraBtn2'); if(nb) nb.onclick=()=>obraModal();
+  const fo=c.querySelector('#firstObra'); if(fo) fo.onclick=()=>obraModal();
+}
+
+/* ============ EXPORTAR CSV ============ */
+function exportCSV(tipo){
+  const o=obra(); let rows=[];
+  if(tipo==='orc'){
+    rows.push(['Capítulo','Código','Designação','Unidade','Qtd','Preço Unit.','Total']);
+    o.capitulos.forEach(c=>{ c.artigos.forEach(a=>rows.push([c.nome,a.codigo,a.designacao,a.unidade,a.qtd,a.preco,artigoTotal(a)])); });
+    rows.push(['','','','','','TOTAL',orcTotal(o)]);
+  }else if(tipo==='custos'){
+    rows.push(['Data','Descrição','Fornecedor','Capítulo','Valor']);
+    o.custos.forEach(x=>{const cap=o.capitulos.find(c=>c.id===x.capituloId);rows.push([x.data,x.descricao,x.fornecedor||'',cap?cap.nome:'geral',x.valor]);});
+  }
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`${tipo}_${o.nome.replace(/\s+/g,'_')}.csv`; a.click();
+  toast('CSV exportado');
+}
+
+/* ARRANQUE */
+boot();
+</script>
+</body>
+</html>
