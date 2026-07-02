@@ -214,9 +214,52 @@ function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000)
 function today(){ return new Date().toISOString().slice(0,10); }
 
 /* CÁLCULOS */
-function artigoTotal(a){ return (a.qtd||0)*(a.preco||0); }
+const IVA = 23; // %
+// Quantidade efetiva: se houver medição (comp×alt) usa a área menos deduções; senão usa qtd direta
+function artigoQtd(a){
+  const comp=+a.comp||0, alt=+a.alt||0, ded=+a.ded||0;
+  if(comp>0 && alt>0) return Math.max(comp*alt-ded, 0);
+  return +a.qtd||0;
+}
+function artigoPU(a){ return (a.puCusto!=null? +a.puCusto : +a.preco)||0; }  // compat: preco antigo
+function artigoPV(a){ return artigoPU(a)*(1+(+a.margem||0)/100); }            // preço de venda c/ margem
+function artigoTotal(a){ return artigoQtd(a)*artigoPV(a); }
 function capTotal(c){ return c.artigos.reduce((s,a)=>s+artigoTotal(a),0); }
 function orcTotal(o){ return o.capitulos.reduce((s,c)=>s+capTotal(c),0); }
+function orcIVA(o){ return orcTotal(o)*IVA/100; }
+function orcTotalComIVA(o){ return orcTotal(o)*(1+IVA/100); }
+
+/* Capítulos padrão A01-A27 (cod, nome, tipo de medição, modo de entrada) */
+const STD_CHAPTERS = [
+  ['A01','Trabalhos Preparatórios','Preço unitário (vg/un)','qtd'],
+  ['A02','Fiscalização e Gestão','Preço unitário (mês/vg)','qtd'],
+  ['A03','Demolições','Preço unitário (m²/m³)','qtd'],
+  ['A04','Movimento de Terras','Preço unitário (m³)','qtd'],
+  ['A05','Betão Armado e Estrutura','Dimensões + Armaduras','qtd'],
+  ['A06','Alvenarias','Áreas (C×A)','area'],
+  ['A07','Hidráulicas','Linear / unitário','qtd'],
+  ['A08','Elétrica e ITED','Pontos + unitário','qtd'],
+  ['A09','Betonilhas','Áreas (C×A)','area'],
+  ['A10','Revestimentos Exteriores','Áreas (C×A)','area'],
+  ['A11','Revestimentos Interiores','Áreas (C×A)','area'],
+  ['A12','Impermeabilizações','Áreas (C×A)','area'],
+  ['A13','Isolamentos','Áreas (C×A)','area'],
+  ['A14','Coberturas','Áreas + linear','area'],
+  ['A15','Caixilharias','Unitário (vão a vão)','qtd'],
+  ['A16','Serralharias','Linear + unitário','qtd'],
+  ['A17','Gesso Cartonado','Áreas (C×A)','area'],
+  ['A18','Carpintarias','Linear + unitário','qtd'],
+  ['A19','Equipamentos Sanitários','Unitário (por peça)','qtd'],
+  ['A20','Pinturas','Áreas (C×A)','area'],
+  ['A21','Eletrodomésticos','Unitário (por peça)','qtd'],
+  ['A22','Arranjos Exteriores','Áreas + linear','area'],
+  ['A23','Mecanismos Elétricos','Unitário (por ponto)','qtd'],
+  ['A24','Ligações e Taxas','Verba global (vg)','qtd'],
+  ['A25','Ensaios e Certificações','Verba global (vg)','qtd'],
+  ['A26','Custos de Obra','Verba global (vg)','qtd'],
+  ['A27','Limpeza Final','Áreas + unitário','area'],
+];
+function capMode(c){ return c.modo || (STD_CHAPTERS.find(s=>c.nome && c.nome.startsWith(s[0]))||[])[3] || 'qtd'; }
 function allArtigos(o){ return o.capitulos.flatMap(c=>c.artigos.map(a=>({...a,capId:c.id,capNome:c.nome}))); }
 // auto: linhas = { artigoId: percentualAcumulado }
 function autoValorAcum(o, auto){
@@ -321,32 +364,83 @@ function viewOrcamento(){
   const o=obra();
   let rows='';
   o.capitulos.forEach(c=>{
+    const areaMode = capMode(c)==='area';
     rows += `<tr class="cap-row" data-cap="${c.id}">
-      <td colspan="2"><input class="tbl-inp" data-edit="capNome" data-cap="${c.id}" value="${esc(c.nome)}" style="font-weight:700"></td>
-      <td></td><td></td><td class="num">${num(capTotal(c))} €</td>
+      <td><input class="tbl-inp" data-edit="capNome" data-cap="${c.id}" value="${esc(c.nome)}" style="font-weight:700"></td>
+      <td colspan="9" class="mini">${esc(c.tipo||'')}</td>
+      <td class="num" style="font-weight:700">${num(capTotal(c))} €</td>
       <td style="text-align:right"><button class="btn dgr" data-delcap="${c.id}" title="Eliminar capítulo">✕</button></td></tr>`;
     c.artigos.forEach(a=>{
+      const med = areaMode
+        ? `<td style="width:64px"><input class="tbl-inp num" type="number" step="any" data-edit="comp" data-art="${a.id}" value="${a.comp??''}"></td>
+           <td style="width:64px"><input class="tbl-inp num" type="number" step="any" data-edit="alt" data-art="${a.id}" value="${a.alt??''}"></td>
+           <td style="width:64px"><input class="tbl-inp num" type="number" step="any" data-edit="ded" data-art="${a.id}" value="${a.ded??''}"></td>
+           <td class="num mini" title="Área = C×A − Ded">${num(artigoQtd(a))}</td>`
+        : `<td colspan="3" style="text-align:center;color:var(--muted)">—</td>
+           <td style="width:80px"><input class="tbl-inp num" type="number" step="any" data-edit="qtd" data-art="${a.id}" value="${a.qtd??0}"></td>`;
       rows += `<tr data-art="${a.id}" data-cap="${c.id}">
-        <td style="width:70px"><input class="tbl-inp" data-edit="codigo" data-art="${a.id}" value="${esc(a.codigo)}"></td>
-        <td><input class="tbl-inp" data-edit="designacao" data-art="${a.id}" value="${esc(a.designacao)}"></td>
-        <td style="width:60px"><input class="tbl-inp" data-edit="unidade" data-art="${a.id}" value="${esc(a.unidade)}"></td>
-        <td style="width:90px"><input class="tbl-inp num" type="number" step="any" data-edit="qtd" data-art="${a.id}" value="${a.qtd}"></td>
-        <td style="width:110px"><input class="tbl-inp num" type="number" step="any" data-edit="preco" data-art="${a.id}" value="${a.preco}"></td>
-        <td class="num" style="width:110px;font-weight:700">${num(artigoTotal(a))} €</td>
-        <td style="text-align:right;width:40px"><button class="btn dgr" data-delart="${a.id}" data-cap="${c.id}">✕</button></td></tr>`;
+        <td style="width:56px"><input class="tbl-inp" data-edit="codigo" data-art="${a.id}" value="${esc(a.codigo||'')}"></td>
+        <td style="min-width:180px"><input class="tbl-inp" data-edit="designacao" data-art="${a.id}" value="${esc(a.designacao||'')}"></td>
+        <td style="width:48px"><input class="tbl-inp" data-edit="unidade" data-art="${a.id}" value="${esc(a.unidade||'')}"></td>
+        ${med}
+        <td style="width:84px"><input class="tbl-inp num" type="number" step="any" data-edit="puCusto" data-art="${a.id}" value="${artigoPU(a)}"></td>
+        <td style="width:60px"><input class="tbl-inp num" type="number" step="any" data-edit="margem" data-art="${a.id}" value="${a.margem??0}"></td>
+        <td class="num mini" title="Preço venda = PU×(1+margem)">${num(artigoPV(a))}</td>
+        <td class="num" style="font-weight:700;width:96px">${num(artigoTotal(a))} €</td>
+        <td style="text-align:right"><button class="btn dgr" data-delart="${a.id}" data-cap="${c.id}">✕</button></td></tr>`;
     });
-    rows += `<tr><td colspan="7" style="padding:4px 10px"><button class="btn sm sec" data-addart="${c.id}">+ artigo</button></td></tr>`;
+    rows += `<tr><td colspan="12" style="padding:4px 10px"><button class="btn sm sec" data-addart="${c.id}">+ linha</button></td></tr>`;
   });
   return `
   <div class="card">
     <div class="card-head"><h2>Mapa de Quantidades e Trabalhos</h2>
       <button class="btn sec sm" data-addcap>+ Capítulo</button>
       <button class="btn sm" data-export="orc">Exportar CSV</button></div>
-    <table><thead><tr><th>Cód.</th><th>Designação</th><th>Un.</th><th class="num">Qtd</th><th class="num">P. Unit.</th><th class="num">Total</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="7" class="mini" style="padding:20px">Sem capítulos. Adiciona o primeiro.</td></tr>'}</tbody>
-    <tfoot><tr style="border-top:2px solid var(--border)"><td colspan="5" style="text-align:right;font-weight:700;padding-top:14px">TOTAL DO ORÇAMENTO</td><td class="num" style="font-size:16px;font-weight:800;color:var(--accent);padding-top:14px">${num(orcTotal(o))} €</td><td></td></tr></tfoot>
-    </table>
+    <div style="overflow-x:auto">
+    <table><thead><tr>
+      <th>Cód.</th><th>Designação</th><th>Un.</th>
+      <th class="num">Comp.</th><th class="num">Alt.</th><th class="num">Ded.</th>
+      <th class="num">Qtd/Área</th><th class="num">PU custo</th><th class="num">Marg.%</th>
+      <th class="num">PV</th><th class="num">Total</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="12" class="mini" style="padding:20px">Sem capítulos. Clica "+ Capítulo" para escolher da lista A01-A27.</td></tr>'}</tbody>
+    <tfoot>
+      <tr style="border-top:2px solid var(--border)"><td colspan="10" style="text-align:right;font-weight:700;padding-top:12px">SUBTOTAL</td><td class="num" style="font-weight:700;padding-top:12px">${num(orcTotal(o))} €</td><td></td></tr>
+      <tr><td colspan="10" style="text-align:right" class="mini">IVA ${IVA}%</td><td class="num mini">${num(orcIVA(o))} €</td><td></td></tr>
+      <tr><td colspan="10" style="text-align:right;font-weight:800">TOTAL COM IVA</td><td class="num" style="font-size:15px;font-weight:800;color:var(--accent)">${num(orcTotalComIVA(o))} €</td><td></td></tr>
+    </tfoot>
+    </table></div>
   </div>`;
+}
+
+/* Modal: escolher capítulo padrão A01-A27 ou personalizado */
+function chapterModal(){
+  const o=obra();
+  const usados = new Set(o.capitulos.map(c=>(c.nome||'').slice(0,3)));
+  const opts = STD_CHAPTERS.map(s=>{
+    const nome = s[0]+' · '+s[1];
+    const dis = usados.has(s[0]);
+    return `<option value="${s[0]}" ${dis?'disabled':''}>${nome}${dis?'  (já adicionado)':''} — ${s[2]}</option>`;
+  }).join('');
+  openModal(`
+    <h3>Adicionar capítulo</h3>
+    <div class="field"><label>Capítulo padrão</label>
+      <select id="ch_std"><option value="">— escolher —</option>${opts}
+      <option value="__custom">Personalizado…</option></select></div>
+    <div class="field hidden" id="ch_custom_wrap"><label>Nome do capítulo</label><input id="ch_custom" placeholder="Ex: Trabalhos diversos"></div>
+    <div class="modal-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="ch_save">Adicionar</button></div>
+  `);
+  $('#ch_std').onchange=e=>{ $('#ch_custom_wrap').classList.toggle('hidden', e.target.value!=='__custom'); };
+  $('#ch_save').onclick=()=>{
+    const v=$('#ch_std').value;
+    if(!v) return toast('Escolhe um capítulo');
+    let nome, tipo, modo;
+    if(v==='__custom'){ nome=$('#ch_custom').value.trim(); if(!nome) return toast('Dá um nome'); tipo='Personalizado'; modo='area'; }
+    else { const s=STD_CHAPTERS.find(x=>x[0]===v); nome=s[0]+' · '+s[1]; tipo=s[2]; modo=s[3]; }
+    o.capitulos.push({id:uid(), nome, tipo, modo, artigos:[]});
+    // manter ordem A01..A27
+    o.capitulos.sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+    closeModal(); render(); toast('Capítulo adicionado');
+  };
 }
 
 /* ============ AUTOS DE MEDIÇÃO ============ */
@@ -619,17 +713,17 @@ function wireView(){
   c.querySelectorAll('[data-export]').forEach(b=>b.onclick=()=>exportCSV(b.dataset.export));
 
   // ORÇAMENTO
-  c.querySelectorAll('[data-addcap]').forEach(b=>b.onclick=()=>{obra().capitulos.push({id:uid(),nome:'Novo capítulo',artigos:[]});render();});
-  c.querySelectorAll('[data-addart]').forEach(b=>b.onclick=()=>{const cap=obra().capitulos.find(x=>x.id===b.dataset.addart);cap.artigos.push({id:uid(),codigo:'',designacao:'Novo artigo',unidade:'un',qtd:0,preco:0});render();});
-  c.querySelectorAll('[data-delcap]').forEach(b=>b.onclick=()=>{if(confirm('Eliminar capítulo e os seus artigos?')){obra().capitulos=obra().capitulos.filter(x=>x.id!==b.dataset.delcap);render();}});
+  const NUMF = ['qtd','preco','puCusto','margem','comp','alt','ded'];
+  c.querySelectorAll('[data-addcap]').forEach(b=>b.onclick=()=>chapterModal());
+  c.querySelectorAll('[data-addart]').forEach(b=>b.onclick=()=>{const cap=obra().capitulos.find(x=>x.id===b.dataset.addart);cap.artigos.push({id:uid(),codigo:'',designacao:'',unidade:capMode(cap)==='area'?'m²':'un',comp:'',alt:'',ded:'',qtd:0,puCusto:0,margem:0});render();});
+  c.querySelectorAll('[data-delcap]').forEach(b=>b.onclick=()=>{if(confirm('Eliminar capítulo e as suas linhas?')){obra().capitulos=obra().capitulos.filter(x=>x.id!==b.dataset.delcap);render();}});
   c.querySelectorAll('[data-delart]').forEach(b=>b.onclick=()=>{const cap=obra().capitulos.find(x=>x.id===b.dataset.cap);cap.artigos=cap.artigos.filter(a=>a.id!==b.dataset.delart);render();});
   c.querySelectorAll('[data-edit]').forEach(inp=>{
     inp.addEventListener('change',()=>{
       const f=inp.dataset.edit;
       if(f==='capNome'){ const cap=obra().capitulos.find(x=>x.id===inp.dataset.cap); cap.nome=inp.value; }
-      else{ const a=allArtigos(obra()).find(x=>x.id===inp.dataset.art);
-        const real=obra().capitulos.flatMap(c2=>c2.artigos).find(x=>x.id===inp.dataset.art);
-        real[f]=(f==='qtd'||f==='preco')? (parseFloat(inp.value)||0) : inp.value; }
+      else{ const real=obra().capitulos.flatMap(c2=>c2.artigos).find(x=>x.id===inp.dataset.art);
+        real[f]= NUMF.includes(f) ? (parseFloat(inp.value)||0) : inp.value; }
       render();
     });
   });
@@ -660,9 +754,11 @@ function wireView(){
 function exportCSV(tipo){
   const o=obra(); let rows=[];
   if(tipo==='orc'){
-    rows.push(['Capítulo','Código','Designação','Unidade','Qtd','Preço Unit.','Total']);
-    o.capitulos.forEach(c=>{ c.artigos.forEach(a=>rows.push([c.nome,a.codigo,a.designacao,a.unidade,a.qtd,a.preco,artigoTotal(a)])); });
-    rows.push(['','','','','','TOTAL',orcTotal(o)]);
+    rows.push(['Capítulo','Código','Designação','Un','Comp','Alt','Ded','Qtd/Área','PU custo','Margem %','PV','Total']);
+    o.capitulos.forEach(c=>{ c.artigos.forEach(a=>rows.push([c.nome,a.codigo||'',a.designacao||'',a.unidade||'',a.comp||'',a.alt||'',a.ded||'',artigoQtd(a),artigoPU(a),a.margem||0,artigoPV(a),artigoTotal(a)])); });
+    rows.push(['','','','','','','','','','','SUBTOTAL',orcTotal(o)]);
+    rows.push(['','','','','','','','','','','IVA '+IVA+'%',orcIVA(o)]);
+    rows.push(['','','','','','','','','','','TOTAL C/IVA',orcTotalComIVA(o)]);
   }else if(tipo==='custos'){
     rows.push(['Data','Descrição','Fornecedor','Capítulo','Valor']);
     o.custos.forEach(x=>{const cap=o.capitulos.find(c=>c.id===x.capituloId);rows.push([x.data,x.descricao,x.fornecedor||'',cap?cap.nome:'geral',x.valor]);});
