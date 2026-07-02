@@ -29,7 +29,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 .nav-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(200,241,53,.05);}
 .nav-item .ico{width:18px;text-align:center;font-size:15px;}
 .nav-badge{margin-left:auto;background:var(--danger);color:#fff;font-size:10px;font-family:var(--mono);border-radius:10px;padding:1px 7px;font-weight:700;}
-.sidebar-foot{margin-top:auto;padding:14px 18px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);font-family:var(--mono);}
+.nav-scroll{flex:1;overflow-y:auto;}
+.nav-item.chap{font-size:12.5px;padding:8px 18px 8px 20px;}
+.nav-item.chap .cod{font-family:var(--mono);font-size:10px;color:var(--muted);min-width:26px;}
+.nav-item.chap.active .cod{color:var(--accent);}
+.sidebar-foot{padding:12px 18px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);font-family:var(--mono);flex-shrink:0;}
 
 /* MAIN */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
@@ -126,14 +130,7 @@ td.num,th.num{text-align:right;font-family:var(--mono);}
     <div class="logo-name">PRO<span>ARKH</span></div>
     <div class="logo-sub">GESTÃO DE OBRA</div>
   </div>
-  <div class="nav-section">Módulos</div>
-  <div class="nav-item active" data-view="dashboard"><span class="ico">▚</span> Resumo</div>
-  <div class="nav-item" data-view="orcamento"><span class="ico">≡</span> Orçamentação</div>
-  <div class="nav-item" data-view="autos"><span class="ico">▤</span> Autos de Medição</div>
-  <div class="nav-item" data-view="custos"><span class="ico">€</span> Controlo de Custos</div>
-  <div class="nav-item" data-view="obra"><span class="ico">◷</span> Gestão de Obra <span class="nav-badge hidden" id="navBadge">0</span></div>
-  <div class="nav-section">Dados</div>
-  <div class="nav-item" data-view="obras"><span class="ico">▦</span> Obras / Clientes</div>
+  <div class="nav-scroll" id="navContainer"></div>
   <div class="sidebar-foot" id="footInfo">v2.1 · local</div>
 </aside>
 
@@ -229,21 +226,21 @@ function orcTotal(o){ return o.capitulos.reduce((s,c)=>s+capTotal(c),0); }
 function orcIVA(o){ return orcTotal(o)*IVA/100; }
 function orcTotalComIVA(o){ return orcTotal(o)*(1+IVA/100); }
 
-/* Capítulos padrão A01-A27 (cod, nome, tipo de medição, modo de entrada) */
+/* Capítulos padrão A01-A27 (cod, nome, tipo de medição, modo de entrada) — nomenclatura do Excel */
 const STD_CHAPTERS = [
   ['A01','Trabalhos Preparatórios','Preço unitário (vg/un)','qtd'],
-  ['A02','Fiscalização e Gestão','Preço unitário (mês/vg)','qtd'],
+  ['A02','Fiscalização e Gestão de Obra','Preço unitário (mês/vg)','qtd'],
   ['A03','Demolições','Preço unitário (m²/m³)','qtd'],
   ['A04','Movimento de Terras','Preço unitário (m³)','qtd'],
   ['A05','Betão Armado e Estrutura','Dimensões + Armaduras','qtd'],
   ['A06','Alvenarias','Áreas (C×A)','area'],
-  ['A07','Hidráulicas','Linear / unitário','qtd'],
-  ['A08','Elétrica e ITED','Pontos + unitário','qtd'],
-  ['A09','Betonilhas','Áreas (C×A)','area'],
+  ['A07','Infraestruturas Hidráulicas','Linear / unitário','qtd'],
+  ['A08','Infraestruturas Elétricas e ITED','Pontos + unitário','qtd'],
+  ['A09','Betonilhas e Regularizações','Áreas (C×A)','area'],
   ['A10','Revestimentos Exteriores','Áreas (C×A)','area'],
   ['A11','Revestimentos Interiores','Áreas (C×A)','area'],
   ['A12','Impermeabilizações','Áreas (C×A)','area'],
-  ['A13','Isolamentos','Áreas (C×A)','area'],
+  ['A13','Isolamentos Térmicos e Acústicos','Áreas (C×A)','area'],
   ['A14','Coberturas','Áreas + linear','area'],
   ['A15','Caixilharias','Unitário (vão a vão)','qtd'],
   ['A16','Serralharias','Linear + unitário','qtd'],
@@ -259,7 +256,14 @@ const STD_CHAPTERS = [
   ['A26','Custos de Obra','Verba global (vg)','qtd'],
   ['A27','Limpeza Final','Áreas + unitário','area'],
 ];
+function chapMeta(cod){ return STD_CHAPTERS.find(s=>s[0]===cod); }
 function capMode(c){ return c.modo || (STD_CHAPTERS.find(s=>c.nome && c.nome.startsWith(s[0]))||[])[3] || 'qtd'; }
+// Obtém (ou cria) o capítulo da obra correspondente a um código A01-A27
+function getCap(o, cod, create){
+  let c = o.capitulos.find(x=>(x.cod===cod) || (x.nome||'').startsWith(cod));
+  if(!c && create){ const m=chapMeta(cod); c={id:uid(),cod:cod,nome:cod+' · '+m[1],tipo:m[2],modo:m[3],artigos:[]}; o.capitulos.push(c); }
+  return c;
+}
 function allArtigos(o){ return o.capitulos.flatMap(c=>c.artigos.map(a=>({...a,capId:c.id,capNome:c.nome}))); }
 // auto: linhas = { artigoId: percentualAcumulado }
 function autoValorAcum(o, auto){
@@ -283,15 +287,17 @@ function custosTotal(o){ return o.custos.reduce((s,c)=>s+(c.valor||0),0); }
 function render(){
   renderObraSelect();
   renderNav();
-  const badge = obra()? obra().tarefas.filter(t=>t.estado!=='concluida').length : 0;
-  $('#navBadge').textContent = badge;
-  $('#navBadge').classList.toggle('hidden', badge===0);
-
-  if(!obra()){ $('#content').innerHTML = emptyObras(); $('#viewTitle').textContent='Obras'; return; }
-  const titles={dashboard:'Resumo',orcamento:'Orçamentação',autos:'Autos de Medição',custos:'Controlo de Custos',obra:'Gestão de Obra',obras:'Obras / Clientes'};
-  $('#viewTitle').textContent = titles[currentView]||'';
-  const fns={dashboard:viewDashboard,orcamento:viewOrcamento,autos:viewAutos,custos:viewCustos,obra:viewObra,obras:viewObras};
-  $('#content').innerHTML = (fns[currentView]||viewDashboard)();
+  if(!obra()){ $('#content').innerHTML = emptyObras(); $('#viewTitle').textContent='Obras'; wireView(); return; }
+  // título
+  let title='';
+  if(currentView.startsWith('cap:')){ const m=chapMeta(currentView.slice(4)); title=currentView.slice(4)+' · '+(m?m[1]:''); }
+  else { const titles={dashboard:'Resumo',cadastro:'Cadastro do Edifício',ficha:'Ficha de Compartimento',orcamento:'Orçamento (resumo)',autos:'Autos de Medição',custos:'Controlo de Custos',obra:'Gestão de Obra',obras:'Obras / Clientes'}; title=titles[currentView]||''; }
+  $('#viewTitle').textContent = title;
+  // conteúdo
+  let html;
+  if(currentView.startsWith('cap:')) html=viewCapitulo(currentView.slice(4));
+  else { const fns={dashboard:viewDashboard,cadastro:viewCadastro,ficha:viewFicha,orcamento:viewOrcamento,autos:viewAutos,custos:viewCustos,obra:viewObra,obras:viewObras}; html=(fns[currentView]||viewDashboard)(); }
+  $('#content').innerHTML = html;
   wireView();
   scheduleSave();
 }
@@ -300,7 +306,29 @@ function renderObraSelect(){
   sel.innerHTML = DB.obras.map(o=>`<option value="${o.id}" ${o.id===currentObraId?'selected':''}>${esc(o.nome)} — ${esc(o.cliente)}</option>`).join('') || '<option>Sem obras</option>';
 }
 function renderNav(){
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===currentView));
+  const o=obra();
+  const badge = o? o.tarefas.filter(t=>t.estado!=='concluida').length : 0;
+  const item=(view,ico,label,extra='')=>`<div class="nav-item ${currentView===view?'active':''}" data-view="${view}"><span class="ico">${ico}</span> ${label}${extra}</div>`;
+  let h='';
+  h+=`<div class="nav-section">Geral</div>`;
+  h+=item('dashboard','▚','Resumo');
+  h+=`<div class="nav-section">Obra</div>`;
+  h+=item('cadastro','⌂','Cadastro do Edifício');
+  h+=item('ficha','▦','Ficha de Compartimento');
+  h+=`<div class="nav-section">Capítulos</div>`;
+  STD_CHAPTERS.forEach(s=>{
+    const c=o&&getCap(o,s[0]); const tem=c&&capTotal(c)>0;
+    h+=`<div class="nav-item chap ${currentView==='cap:'+s[0]?'active':''}" data-view="cap:${s[0]}"><span class="cod">${s[0]}</span>${esc(s[1])}${tem?` <span class="spacer"></span><span class="mini" style="color:var(--muted)">${num(capTotal(c))}</span>`:''}</div>`;
+  });
+  h+=`<div class="nav-section">Orçamento</div>`;
+  h+=item('orcamento','≡','Orçamento (resumo)');
+  h+=item('autos','▤','Autos de Medição');
+  h+=item('custos','€','Controlo de Custos');
+  h+=`<div class="nav-section">Gestão</div>`;
+  h+=item('obra','◷','Gestão de Obra', badge?` <span class="nav-badge">${badge}</span>`:'');
+  h+=item('obras','▦','Obras / Clientes');
+  const nc=$('#navContainer'); nc.innerHTML=h;
+  nc.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{ currentView=n.dataset.view; render(); });
 }
 
 /* ============ DASHBOARD ============ */
@@ -359,7 +387,95 @@ function viewDashboard(){
   </div>`;
 }
 
-/* ============ ORÇAMENTAÇÃO ============ */
+/* ============ ORÇAMENTO — helpers de tabela ============ */
+function orcThead(){
+  return `<thead><tr>
+    <th>Cód.</th><th>Designação</th><th>Un.</th>
+    <th class="num">Comp.</th><th class="num">Alt.</th><th class="num">Ded.</th>
+    <th class="num">Qtd/Área</th><th class="num">PU custo</th><th class="num">Marg.%</th>
+    <th class="num">PV</th><th class="num">Total</th><th></th></tr></thead>`;
+}
+function artigoRowHTML(a, areaMode, capId){
+  const med = areaMode
+    ? `<td style="width:64px"><input class="tbl-inp num" type="number" step="any" data-edit="comp" data-art="${a.id}" value="${a.comp??''}"></td>
+       <td style="width:64px"><input class="tbl-inp num" type="number" step="any" data-edit="alt" data-art="${a.id}" value="${a.alt??''}"></td>
+       <td style="width:64px"><input class="tbl-inp num" type="number" step="any" data-edit="ded" data-art="${a.id}" value="${a.ded??''}"></td>
+       <td class="num mini" title="Área = C×A − Ded">${num(artigoQtd(a))}</td>`
+    : `<td colspan="3" style="text-align:center;color:var(--muted)">—</td>
+       <td style="width:80px"><input class="tbl-inp num" type="number" step="any" data-edit="qtd" data-art="${a.id}" value="${a.qtd??0}"></td>`;
+  return `<tr data-art="${a.id}" data-cap="${capId}">
+    <td style="width:56px"><input class="tbl-inp" data-edit="codigo" data-art="${a.id}" value="${esc(a.codigo||'')}"></td>
+    <td style="min-width:180px"><input class="tbl-inp" data-edit="designacao" data-art="${a.id}" value="${esc(a.designacao||'')}"></td>
+    <td style="width:48px"><input class="tbl-inp" data-edit="unidade" data-art="${a.id}" value="${esc(a.unidade||'')}"></td>
+    ${med}
+    <td style="width:84px"><input class="tbl-inp num" type="number" step="any" data-edit="puCusto" data-art="${a.id}" value="${artigoPU(a)}"></td>
+    <td style="width:60px"><input class="tbl-inp num" type="number" step="any" data-edit="margem" data-art="${a.id}" value="${a.margem??0}"></td>
+    <td class="num mini" title="Preço venda = PU×(1+margem)">${num(artigoPV(a))}</td>
+    <td class="num" style="font-weight:700;width:96px">${num(artigoTotal(a))} €</td>
+    <td style="text-align:right"><button class="btn dgr" data-delart="${a.id}" data-cap="${capId}">✕</button></td></tr>`;
+}
+
+/* ============ SEPARADOR DE CAPÍTULO (folha onde se lançam medições) ============ */
+function viewCapitulo(cod){
+  const o=obra(); const m=chapMeta(cod); const c=getCap(o,cod);
+  const areaMode = m[3]==='area';
+  const arts = c? c.artigos : [];
+  const rows = arts.map(a=>artigoRowHTML(a, areaMode, c.id)).join('')
+    || `<tr><td colspan="12" class="mini" style="padding:18px">Sem linhas neste capítulo. Clica "+ linha" para lançar a primeira medição.</td></tr>`;
+  return `
+  <div class="card">
+    <div class="card-head">
+      <h2>${cod} · ${esc(m[1])}</h2>
+      <span class="badge b" style="margin-left:4px">${esc(m[2])}</span>
+      <button class="btn sm" style="margin-left:auto" data-addartcap="${cod}">+ linha</button>
+    </div>
+    <div style="overflow-x:auto">
+    <table>${orcThead()}
+    <tbody>${rows}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--border)"><td colspan="10" style="text-align:right;font-weight:800;padding-top:12px">TOTAL ${cod}</td><td class="num" style="font-weight:800;color:var(--accent);padding-top:12px">${num(c?capTotal(c):0)} €</td><td></td></tr></tfoot>
+    </table></div>
+    <p class="mini" style="margin-top:10px">${areaMode?'Medição por área: preenche Comp. × Alt. − Deduções. ':''}Preenche o PU custo e a margem — o PV e o total calculam-se sozinhos. O valor deste capítulo entra automaticamente no Orçamento (resumo).</p>
+  </div>`;
+}
+
+/* ============ CADASTRO DO EDIFÍCIO ============ */
+function viewCadastro(){
+  const o=obra(); const cad=o.cadastro||(o.cadastro={});
+  const f=(k,label,ph='',type='text')=>`<div class="field"><label>${label}</label><input data-cad="${k}" type="${type}" value="${esc(cad[k]??'')}" placeholder="${ph}"></div>`;
+  return `
+  <div class="card">
+    <div class="card-head"><h2>Cadastro do Edifício</h2><span class="mini" style="margin-left:8px">dados-base da obra</span></div>
+    <div class="field-row">${f('designacao','Designação / Nome')}${f('tipologia','Tipologia (ex: T3)')}</div>
+    <div class="field">${''}<label>Morada / Localização</label><input data-cad="morada" value="${esc(cad.morada??'')}"></div>
+    <div class="field-row">${f('nPisos','Nº de pisos','', 'number')}${f('areaImplantacao','Área implantação (m²)','','number')}${f('areaBruta','Área bruta constr. (m²)','','number')}</div>
+    <div class="field-row">${f('anoConstrucao','Ano','','number')}${f('responsavel','Responsável técnico')}</div>
+    <div class="field"><label>Observações</label><textarea data-cad="obs" rows="3">${esc(cad.obs??'')}</textarea></div>
+    <p class="mini">Nota: nesta fase o cadastro guarda os dados-base. O cálculo automático de quantidades para os capítulos (preenche uma vez, tudo se calcula) fica para a fase seguinte.</p>
+  </div>`;
+}
+
+/* ============ FICHA DE COMPARTIMENTO ============ */
+function viewFicha(){
+  const o=obra(); const comps=o.compartimentos||(o.compartimentos=[]);
+  const rows=comps.map(k=>`<tr data-comp="${k.id}">
+    <td><input class="tbl-inp" data-compf="nome" data-comp="${k.id}" value="${esc(k.nome||'')}"></td>
+    <td style="width:80px"><input class="tbl-inp" data-compf="piso" data-comp="${k.id}" value="${esc(k.piso||'')}"></td>
+    <td style="width:90px"><input class="tbl-inp num" type="number" step="any" data-compf="comp" data-comp="${k.id}" value="${k.comp??''}"></td>
+    <td style="width:90px"><input class="tbl-inp num" type="number" step="any" data-compf="larg" data-comp="${k.id}" value="${k.larg??''}"></td>
+    <td style="width:90px"><input class="tbl-inp num" type="number" step="any" data-compf="pd" data-comp="${k.id}" value="${k.pd??''}"></td>
+    <td class="num mini">${num((+k.comp||0)*(+k.larg||0))}</td>
+    <td style="text-align:right"><button class="btn dgr" data-delcomp="${k.id}">✕</button></td></tr>`).join('')
+    || `<tr><td colspan="7" class="mini" style="padding:18px">Sem compartimentos. Clica "+ compartimento".</td></tr>`;
+  return `
+  <div class="card">
+    <div class="card-head"><h2>Ficha de Compartimento</h2><button class="btn sm" style="margin-left:auto" data-addcomp>+ compartimento</button></div>
+    <table><thead><tr><th>Compartimento</th><th>Piso</th><th class="num">Comp. (m)</th><th class="num">Larg. (m)</th><th class="num">Pé-dir. (m)</th><th class="num">Área (m²)</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <p class="mini" style="margin-top:10px">Nesta fase guarda a lista de compartimentos e áreas. A ligação automática às medições dos capítulos fica para a fase seguinte.</p>
+  </div>`;
+}
+
+/* ============ ORÇAMENTO (RESUMO) ============ */
 function viewOrcamento(){
   const o=obra();
   let rows='';
@@ -370,38 +486,16 @@ function viewOrcamento(){
       <td colspan="9" class="mini">${esc(c.tipo||'')}</td>
       <td class="num" style="font-weight:700">${num(capTotal(c))} €</td>
       <td style="text-align:right"><button class="btn dgr" data-delcap="${c.id}" title="Eliminar capítulo">✕</button></td></tr>`;
-    c.artigos.forEach(a=>{
-      const med = areaMode
-        ? `<td style="width:64px"><input class="tbl-inp num" type="number" step="any" data-edit="comp" data-art="${a.id}" value="${a.comp??''}"></td>
-           <td style="width:64px"><input class="tbl-inp num" type="number" step="any" data-edit="alt" data-art="${a.id}" value="${a.alt??''}"></td>
-           <td style="width:64px"><input class="tbl-inp num" type="number" step="any" data-edit="ded" data-art="${a.id}" value="${a.ded??''}"></td>
-           <td class="num mini" title="Área = C×A − Ded">${num(artigoQtd(a))}</td>`
-        : `<td colspan="3" style="text-align:center;color:var(--muted)">—</td>
-           <td style="width:80px"><input class="tbl-inp num" type="number" step="any" data-edit="qtd" data-art="${a.id}" value="${a.qtd??0}"></td>`;
-      rows += `<tr data-art="${a.id}" data-cap="${c.id}">
-        <td style="width:56px"><input class="tbl-inp" data-edit="codigo" data-art="${a.id}" value="${esc(a.codigo||'')}"></td>
-        <td style="min-width:180px"><input class="tbl-inp" data-edit="designacao" data-art="${a.id}" value="${esc(a.designacao||'')}"></td>
-        <td style="width:48px"><input class="tbl-inp" data-edit="unidade" data-art="${a.id}" value="${esc(a.unidade||'')}"></td>
-        ${med}
-        <td style="width:84px"><input class="tbl-inp num" type="number" step="any" data-edit="puCusto" data-art="${a.id}" value="${artigoPU(a)}"></td>
-        <td style="width:60px"><input class="tbl-inp num" type="number" step="any" data-edit="margem" data-art="${a.id}" value="${a.margem??0}"></td>
-        <td class="num mini" title="Preço venda = PU×(1+margem)">${num(artigoPV(a))}</td>
-        <td class="num" style="font-weight:700;width:96px">${num(artigoTotal(a))} €</td>
-        <td style="text-align:right"><button class="btn dgr" data-delart="${a.id}" data-cap="${c.id}">✕</button></td></tr>`;
-    });
+    c.artigos.forEach(a=>{ rows += artigoRowHTML(a, areaMode, c.id); });
     rows += `<tr><td colspan="12" style="padding:4px 10px"><button class="btn sm sec" data-addart="${c.id}">+ linha</button></td></tr>`;
   });
   return `
   <div class="card">
-    <div class="card-head"><h2>Mapa de Quantidades e Trabalhos</h2>
+    <div class="card-head"><h2>Orçamento — Resumo</h2>
       <button class="btn sec sm" data-addcap>+ Capítulo</button>
       <button class="btn sm" data-export="orc">Exportar CSV</button></div>
     <div style="overflow-x:auto">
-    <table><thead><tr>
-      <th>Cód.</th><th>Designação</th><th>Un.</th>
-      <th class="num">Comp.</th><th class="num">Alt.</th><th class="num">Ded.</th>
-      <th class="num">Qtd/Área</th><th class="num">PU custo</th><th class="num">Marg.%</th>
-      <th class="num">PV</th><th class="num">Total</th><th></th></tr></thead>
+    <table>${orcThead()}
     <tbody>${rows || '<tr><td colspan="12" class="mini" style="padding:20px">Sem capítulos. Clica "+ Capítulo" para escolher da lista A01-A27.</td></tr>'}</tbody>
     <tfoot>
       <tr style="border-top:2px solid var(--border)"><td colspan="10" style="text-align:right;font-weight:700;padding-top:12px">SUBTOTAL</td><td class="num" style="font-weight:700;padding-top:12px">${num(orcTotal(o))} €</td><td></td></tr>
@@ -701,8 +795,7 @@ function openModal(html){ $('#modalBox').innerHTML=html; $('#modalBg').classList
 function closeModal(){ $('#modalBg').classList.remove('show'); }
 $('#modalBg').addEventListener('click',e=>{ if(e.target.id==='modalBg'||e.target.dataset.close!==undefined) closeModal(); });
 
-/* Navegação */
-document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{ currentView=n.dataset.view; render(); });
+/* Navegação (a barra lateral é construída dinamicamente em renderNav) */
 $('#obraSelect').onchange=e=>{ currentObraId=e.target.value; render(); };
 $('#newObraBtn').onclick=()=>obraModal();
 
@@ -714,8 +807,10 @@ function wireView(){
 
   // ORÇAMENTO
   const NUMF = ['qtd','preco','puCusto','margem','comp','alt','ded'];
+  const novaLinha=cap=>({id:uid(),codigo:'',designacao:'',unidade:capMode(cap)==='area'?'m²':'un',comp:'',alt:'',ded:'',qtd:0,puCusto:0,margem:0});
   c.querySelectorAll('[data-addcap]').forEach(b=>b.onclick=()=>chapterModal());
-  c.querySelectorAll('[data-addart]').forEach(b=>b.onclick=()=>{const cap=obra().capitulos.find(x=>x.id===b.dataset.addart);cap.artigos.push({id:uid(),codigo:'',designacao:'',unidade:capMode(cap)==='area'?'m²':'un',comp:'',alt:'',ded:'',qtd:0,puCusto:0,margem:0});render();});
+  c.querySelectorAll('[data-addart]').forEach(b=>b.onclick=()=>{const cap=obra().capitulos.find(x=>x.id===b.dataset.addart);cap.artigos.push(novaLinha(cap));render();});
+  c.querySelectorAll('[data-addartcap]').forEach(b=>b.onclick=()=>{const cap=getCap(obra(),b.dataset.addartcap,true);cap.artigos.push(novaLinha(cap));render();});
   c.querySelectorAll('[data-delcap]').forEach(b=>b.onclick=()=>{if(confirm('Eliminar capítulo e as suas linhas?')){obra().capitulos=obra().capitulos.filter(x=>x.id!==b.dataset.delcap);render();}});
   c.querySelectorAll('[data-delart]').forEach(b=>b.onclick=()=>{const cap=obra().capitulos.find(x=>x.id===b.dataset.cap);cap.artigos=cap.artigos.filter(a=>a.id!==b.dataset.delart);render();});
   c.querySelectorAll('[data-edit]').forEach(inp=>{
@@ -727,6 +822,14 @@ function wireView(){
       render();
     });
   });
+
+  // CADASTRO DO EDIFÍCIO
+  c.querySelectorAll('[data-cad]').forEach(inp=>inp.addEventListener('change',()=>{obra().cadastro=obra().cadastro||{};obra().cadastro[inp.dataset.cad]=inp.value;scheduleSave();}));
+
+  // FICHA DE COMPARTIMENTO
+  c.querySelectorAll('[data-addcomp]').forEach(b=>b.onclick=()=>{const o=obra();o.compartimentos=o.compartimentos||[];o.compartimentos.push({id:uid(),nome:'',piso:'',comp:'',larg:'',pd:''});render();});
+  c.querySelectorAll('[data-delcomp]').forEach(b=>b.onclick=()=>{const o=obra();o.compartimentos=o.compartimentos.filter(k=>k.id!==b.dataset.delcomp);render();});
+  c.querySelectorAll('[data-compf]').forEach(inp=>inp.addEventListener('change',()=>{const k=obra().compartimentos.find(x=>x.id===inp.dataset.comp);const f=inp.dataset.compf;k[f]=['comp','larg','pd'].includes(f)?(parseFloat(inp.value)||0):inp.value;render();}));
 
   // AUTOS
   c.querySelectorAll('[data-newauto]').forEach(b=>b.onclick=()=>autoModal());
