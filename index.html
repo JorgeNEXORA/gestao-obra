@@ -221,7 +221,7 @@ function artigoQtd(a){
 function artigoPU(a){ return (a.puCusto!=null? +a.puCusto : +a.preco)||0; }  // compat: preco antigo
 function artigoPV(a){ return artigoPU(a)*(1+(+a.margem||0)/100); }            // preço de venda c/ margem
 function artigoTotal(a){ return artigoQtd(a)*artigoPV(a); }
-function capTotal(c){ return c.artigos.reduce((s,a)=>s+artigoTotal(a),0); }
+function capTotal(c){ if(c.a05) return a05Total(c.a05); return c.artigos.reduce((s,a)=>s+artigoTotal(a),0); }
 function orcTotal(o){ return o.capitulos.reduce((s,c)=>s+capTotal(c),0); }
 function orcIVA(o){ return orcTotal(o)*IVA/100; }
 function orcTotalComIVA(o){ return orcTotal(o)*(1+IVA/100); }
@@ -261,9 +261,53 @@ function capMode(c){ return c.modo || (STD_CHAPTERS.find(s=>c.nome && c.nome.sta
 // Obtém (ou cria) o capítulo da obra correspondente a um código A01-A27
 function getCap(o, cod, create){
   let c = o.capitulos.find(x=>(x.cod===cod) || (x.nome||'').startsWith(cod));
-  if(!c && create){ const m=chapMeta(cod); c={id:uid(),cod:cod,nome:cod+' · '+m[1],tipo:m[2],modo:m[3],artigos:[]}; o.capitulos.push(c); }
+  if(!c && create){ const m=chapMeta(cod); c={id:uid(),cod:cod,nome:cod+' · '+m[1],tipo:m[2],modo:m[3],artigos:[]}; if(cod==='A05') c.a05=a05New(); o.capitulos.push(c); }
+  if(c && cod==='A05' && !c.a05) c.a05=a05New();
   return c;
 }
+
+/* ============ A05 — CÁLCULO DE BETÃO ARMADO E ESTRUTURA ============ */
+const A05_DEFAULTS = {custoBetao:81.8,custoCofr:12,custoBomba:12,despBetao:0.05,despAco:0.12,pctArame:0.03,euroHora:18.49,prodBet:6,prodFerro:80,nHomCofr:3,nHomBet:4,nHomFerro:2,indiretos:0.15,garantia:0.05,margem:0.20,precoO8:1.14,precoO12:1.09,espLimpeza:0.10,euroMagro:70,folga:0.05};
+const A05_PARAM_LABELS = {custoBetao:'Custo betão (€/m³)',custoCofr:'Custo cofragem (€/m²)',custoBomba:'Custo bomba (€/m³)',despBetao:'Desp. betão',despAco:'Desp. aço',pctArame:'% Arame',euroHora:'€/h homem',prodBet:'Prod. betão (m³/h)',prodFerro:'Prod. ferro (kg/h)',nHomCofr:'Nº homens cofr.',nHomBet:'Nº homens betão',nHomFerro:'Nº homens ferro',indiretos:'Indiretos',garantia:'Garantia',margem:'Margem',precoO8:'Preço Ø8 (€/kg)',precoO12:'Preço Ø12 (€/kg)',espLimpeza:'Esp. limpeza (m)',euroMagro:'€/m³ betão magro',folga:'Folga lateral (m)'};
+const A05_TIPOS = [
+  {key:'sapatas',   nome:'Sapatas Isoladas',    dims:['L','B','H'], taxa:80,  prodCofr:5,   cof:d=>2*(d[0]+d[1])*d[2],  limpeza:(d,p)=>(d[0]+2*p.folga)*(d[1]+2*p.folga)*p.espLimpeza*p.euroMagro},
+  {key:'pilares',   nome:'Pilares',             dims:['a','b','h'], taxa:100, prodCofr:9.3, cof:d=>2*(d[0]+d[1])*d[2],  limpeza:()=>0},
+  {key:'vigasFund', nome:'Vigas de Fundação',   dims:['L','b','h'], taxa:100, prodCofr:6,   cof:d=>(2*d[2]+d[1])*d[0], limpeza:(d,p)=>(d[1]+2*p.folga)*d[0]*p.espLimpeza*p.euroMagro},
+  {key:'vigasCarga',nome:'Vigas de Carga',      dims:['L','b','h'], taxa:100, prodCofr:7,   cof:d=>(2*d[2]+d[1])*d[0], limpeza:()=>0},
+];
+function a05Tipo(key){ return A05_TIPOS.find(t=>t.key===key); }
+function a05New(){ return {params:{...A05_DEFAULTS}, tipos:{sapatas:[],pilares:[],vigasFund:[],vigasCarga:[]}, sub:'sapatas'}; }
+function a05Params(a05){ return {...A05_DEFAULTS, ...(a05.params||{})}; }
+function a05Calc(el, tipo, p){
+  const d = tipo.dims.map(k=>+el[k]||0);
+  const volu = d[0]*d[1]*d[2];
+  const qtd = +el.qtd||0;
+  const volDesp = volu*qtd*(1+p.despBetao);
+  const cofu = volu>0? tipo.cof(d) : 0;
+  const coft = cofu*qtd;
+  const acoObra = volu*tipo.taxa*qtd*(1+p.despAco);
+  const arame = acoObra*p.pctArame;
+  const betaoE = volDesp*p.custoBetao;
+  const cofrE = coft*p.custoCofr;
+  const acoE = acoObra*p.precoO12;
+  const arameE = arame*p.precoO8;
+  const bombaE = volDesp*p.custoBomba;
+  const limpezaE = (volu>0? tipo.limpeza(d,p):0)*qtd;
+  const totalMat = betaoE+cofrE+acoE+arameE+bombaE+limpezaE;
+  const hCof = tipo.prodCofr>0? coft/tipo.prodCofr:0;
+  const hBet = p.prodBet>0? volDesp/p.prodBet:0;
+  const hFerro = p.prodFerro>0? acoObra/p.prodFerro:0;
+  const moE = (hCof*p.nHomCofr + hBet*p.nHomBet + hFerro*p.nHomFerro)*p.euroHora;
+  const direto = totalMat+moE;
+  const indir = direto*p.indiretos;
+  const gar = (direto+indir)*p.garantia;
+  const subtotal = direto+indir+gar;
+  const lucro = subtotal*p.margem;
+  const total = subtotal+lucro;
+  return {volu,volDesp,coft,acoObra,totalMat,moE,total, puElem: qtd>0?total/qtd:0, puM3:(volu*qtd)>0?total/(volu*qtd):0};
+}
+function a05TipoTotal(a05, key){ const t=a05Tipo(key); const p=a05Params(a05); return (a05.tipos[key]||[]).reduce((s,el)=>s+a05Calc(el,t,p).total,0); }
+function a05Total(a05){ if(!a05) return 0; return A05_TIPOS.reduce((s,t)=>s+a05TipoTotal(a05,t.key),0); }
 function allArtigos(o){ return o.capitulos.flatMap(c=>c.artigos.map(a=>({...a,capId:c.id,capNome:c.nome}))); }
 // auto: linhas = { artigoId: percentualAcumulado }
 function autoValorAcum(o, auto){
@@ -415,8 +459,59 @@ function artigoRowHTML(a, areaMode, capId){
     <td style="text-align:right"><button class="btn dgr" data-delart="${a.id}" data-cap="${capId}">✕</button></td></tr>`;
 }
 
+/* ============ A05 — VISTA DEDICADA (calculadora de betão) ============ */
+function viewA05(){
+  const o=obra(); const c=getCap(o,'A05',true); const a05=c.a05; const p=a05Params(a05);
+  const sub=a05.sub||'sapatas'; const tipo=a05Tipo(sub);
+  // parâmetros base
+  const parK=Object.keys(A05_PARAM_LABELS);
+  const pct=['despBetao','despAco','pctArame','indiretos','garantia','margem'];
+  const parHtml=parK.map(k=>`<div class="field" style="margin-bottom:8px"><label style="font-size:9px">${A05_PARAM_LABELS[k]}</label><input class="tbl-inp num" style="border-color:var(--border)" type="number" step="any" data-a05p="${k}" value="${pct.includes(k)?(p[k]*100):p[k]}">${pct.includes(k)?' <span class="mini">%</span>':''}</div>`).join('');
+  // sub-tabs
+  const tabs=A05_TIPOS.map(t=>`<button class="btn sm ${t.key===sub?'':'sec'}" data-a05sub="${t.key}">${t.nome} <span class="mini">${num(a05TipoTotal(a05,t.key))}€</span></button>`).join(' ');
+  // tabela de elementos do sub tipo
+  const els=a05.tipos[sub]||[];
+  const rows=els.map(el=>{
+    const r=a05Calc(el,tipo,p);
+    const dimInputs=tipo.dims.map(k=>`<td style="width:70px"><input class="tbl-inp num" type="number" step="any" data-a05e="${el.id}" data-a05f="${k}" value="${el[k]??''}"></td>`).join('');
+    return `<tr>
+      <td style="width:60px"><input class="tbl-inp" data-a05e="${el.id}" data-a05f="ref" value="${esc(el.ref||'')}"></td>
+      ${dimInputs}
+      <td style="width:60px"><input class="tbl-inp num" type="number" step="any" data-a05e="${el.id}" data-a05f="qtd" value="${el.qtd??1}"></td>
+      <td class="num mini">${num(r.volu)}</td>
+      <td class="num mini">${num(r.coft)}</td>
+      <td class="num mini">${num(r.acoObra)}</td>
+      <td class="num mini">${num(r.totalMat)}</td>
+      <td class="num mini">${num(r.moE)}</td>
+      <td class="num" style="font-weight:700;width:96px">${num(r.total)} €</td>
+      <td class="num mini">${num(r.puElem)}</td>
+      <td class="num mini">${num(r.puM3)}</td>
+      <td style="text-align:right"><button class="btn dgr" data-a05del="${el.id}">✕</button></td></tr>`;
+  }).join('') || `<tr><td colspan="14" class="mini" style="padding:18px">Sem elementos. Clica "+ elemento" para lançar.</td></tr>`;
+  const dimHead=tipo.dims.map(k=>`<th class="num">${k} (m)</th>`).join('');
+  return `
+  <div class="card">
+    <div class="card-head"><h2>A05 · Betão Armado e Estrutura</h2><span class="badge b" style="margin-left:4px">Folha de Cálculo Integrada</span>
+      <span class="spacer"></span><span class="mini">TOTAL A05:</span> <b style="font-family:var(--mono);color:var(--accent)">${num(a05Total(a05))} €</b></div>
+    <details style="margin-bottom:14px"><summary class="mini" style="cursor:pointer;padding:6px 0">⚙ Parâmetros base (custos, produtividades, margens) — clica para editar</summary>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px">${parHtml}</div>
+    </details>
+    <div class="row-flex" style="flex-wrap:wrap;gap:6px;margin-bottom:14px">${tabs}</div>
+    <div class="card-head"><h2 style="font-size:13px">${tipo.nome}</h2><button class="btn sm" style="margin-left:auto" data-a05add>+ elemento</button></div>
+    <div style="overflow-x:auto"><table><thead><tr>
+      <th>Ref.</th>${dimHead}<th class="num">Qtd</th>
+      <th class="num">Vol (m³)</th><th class="num">Cofr (m²)</th><th class="num">Aço (kg)</th>
+      <th class="num">Mat. €</th><th class="num">MO €</th><th class="num">TOTAL</th><th class="num">PU/elem</th><th class="num">PU/m³</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--border)"><td colspan="${tipo.dims.length+9}" style="text-align:right;font-weight:800;padding-top:12px">TOTAL ${tipo.nome}</td><td class="num" style="font-weight:800;color:var(--accent);padding-top:12px" colspan="2">${num(a05TipoTotal(a05,sub))} €</td><td></td></tr></tfoot>
+    </table></div>
+    <p class="mini" style="margin-top:10px">Lança os elementos com as dimensões e quantidade — o volume, cofragem, aço e todos os custos (material + mão de obra + indiretos + garantia + lucro) calculam-se como no teu Excel. O total do A05 entra no Orçamento (resumo).</p>
+  </div>`;
+}
+
 /* ============ SEPARADOR DE CAPÍTULO (folha onde se lançam medições) ============ */
 function viewCapitulo(cod){
+  if(cod==='A05') return viewA05();
   const o=obra(); const m=chapMeta(cod); const c=getCap(o,cod);
   const areaMode = m[3]==='area';
   const arts = c? c.artigos : [];
@@ -822,6 +917,15 @@ function wireView(){
       render();
     });
   });
+
+  // A05 BETÃO
+  const a05of=()=>getCap(obra(),'A05',true).a05;
+  const A05PCT=['despBetao','despAco','pctArame','indiretos','garantia','margem'];
+  c.querySelectorAll('[data-a05sub]').forEach(b=>b.onclick=()=>{a05of().sub=b.dataset.a05sub;render();});
+  c.querySelectorAll('[data-a05add]').forEach(b=>b.onclick=()=>{const a=a05of();a.tipos[a.sub].push({id:uid(),ref:'',qtd:1});render();});
+  c.querySelectorAll('[data-a05del]').forEach(b=>b.onclick=()=>{const a=a05of();a.tipos[a.sub]=a.tipos[a.sub].filter(e=>e.id!==b.dataset.a05del);render();});
+  c.querySelectorAll('[data-a05p]').forEach(inp=>inp.addEventListener('change',()=>{const a=a05of();a.params=a.params||{...A05_DEFAULTS};let v=parseFloat(inp.value)||0;const k=inp.dataset.a05p;a.params[k]=A05PCT.includes(k)?v/100:v;render();}));
+  c.querySelectorAll('[data-a05e]').forEach(inp=>inp.addEventListener('change',()=>{const a=a05of();const el=a.tipos[a.sub].find(e=>e.id===inp.dataset.a05e);const f=inp.dataset.a05f;el[f]=(f==='ref')?inp.value:(parseFloat(inp.value)||0);render();}));
 
   // CADASTRO DO EDIFÍCIO
   c.querySelectorAll('[data-cad]').forEach(inp=>inp.addEventListener('change',()=>{obra().cadastro=obra().cadastro||{};obra().cadastro[inp.dataset.cad]=inp.value;scheduleSave();}));
