@@ -261,8 +261,8 @@ function capMode(c){ return c.modo || (STD_CHAPTERS.find(s=>c.nome && c.nome.sta
 // Obtém (ou cria) o capítulo da obra correspondente a um código A01-A27
 function getCap(o, cod, create){
   let c = o.capitulos.find(x=>(x.cod===cod) || (x.nome||'').startsWith(cod));
-  if(!c && create){ const m=chapMeta(cod); c={id:uid(),cod:cod,nome:cod+' · '+m[1],tipo:m[2],modo:m[3],artigos:[]}; if(cod==='A05') c.a05=a05New(); o.capitulos.push(c); }
-  if(c && cod==='A05' && !c.a05) c.a05=a05New();
+  if(!c && create){ const m=chapMeta(cod); c={id:uid(),cod:cod,nome:cod+' · '+m[1],tipo:m[2],modo:m[3],artigos:[]}; o.capitulos.push(c); }
+  if(c && create && cod==='A05' && !c.a05) c.a05=a05New(); // inicializa A05 só quando abrimos o separador
   return c;
 }
 
